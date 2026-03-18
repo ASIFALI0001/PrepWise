@@ -28,7 +28,7 @@ export async function createFeedback(params: CreateFeedbackParams) {
         console.log("📝 Formatted transcript:", formattedTranscript);
 
         const { object } = await generateObject({
-            model: google("gemini-2.0-flash"),
+            model: google("models/gemini-2.5-flash"), // ✅ correct model
             schema: feedbackSchema,
             prompt: `
 You are a strict AI interviewer evaluating a candidate based on their interview transcript.
@@ -64,7 +64,6 @@ Also provide:
             createdAt: new Date().toISOString(),
         };
 
-        // ✅ If feedbackId exists, update it — otherwise create new
         const feedbackRef = feedbackId
             ? db.collection("feedback").doc(feedbackId)
             : db.collection("feedback").doc();
@@ -120,9 +119,7 @@ export async function getInterviewById(
 
     try {
         const interview = await db.collection("interviews").doc(id).get();
-
         if (!interview.exists) return null;
-
         return { id: interview.id, ...interview.data() } as Interview;
     } catch (error) {
         console.error("Error fetching interview:", error);
@@ -135,7 +132,6 @@ export async function getFeedbackByInterviewId(
     params: GetFeedbackByInterviewIdParams
 ): Promise<Feedback | null> {
     const { interviewId, userId } = params;
-
     if (!interviewId || !userId) return null;
 
     try {
@@ -149,11 +145,7 @@ export async function getFeedbackByInterviewId(
         if (querySnapshot.empty) return null;
 
         const feedbackDoc = querySnapshot.docs[0];
-
-        return {
-            id: feedbackDoc.id,
-            ...feedbackDoc.data(),
-        } as Feedback;
+        return { id: feedbackDoc.id, ...feedbackDoc.data() } as Feedback;
     } catch (error) {
         console.error("Error fetching feedback:", error);
         return null;
@@ -165,7 +157,6 @@ export async function getLatestInterviews(
     params: GetLatestInterviewsParams
 ): Promise<Interview[]> {
     const { userId, limit = 20 } = params;
-
     if (!userId) return [];
 
     try {
@@ -175,10 +166,7 @@ export async function getLatestInterviews(
             .get();
 
         const filtered = snapshot.docs
-            .map((doc) => ({
-                id: doc.id,
-                ...doc.data(),
-            }))
+            .map((doc) => ({ id: doc.id, ...doc.data() }))
             .filter(
                 (interview: any) =>
                     interview.finalized === true &&
