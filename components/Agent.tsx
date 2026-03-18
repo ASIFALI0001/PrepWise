@@ -73,6 +73,7 @@ const Agent = ({
         }
 
         const handleGenerateFeedback = async (messages: SavedMessage[]) => {
+            console.log("🎯 Generating feedback...");
             if (!interviewId || !userId) return;
 
             const { success, feedbackId: id } = await createFeedback({
@@ -85,6 +86,7 @@ const Agent = ({
             if (success && id) {
                 router.push(`/interview/${interviewId}/feedback`);
             } else {
+                console.error("❌ Feedback generation failed");
                 router.push("/");
             }
         };
@@ -104,6 +106,7 @@ const Agent = ({
 
         try {
             if (type === "generate") {
+                // ✅ Generate interview flow
                 await vapi.start({
                     transcriber: {
                         provider: "deepgram",
@@ -144,7 +147,7 @@ IMPORTANT for question 6:
 Once ALL 6 details are clearly collected and confirmed, IMMEDIATELY call the generateInterview function with:
 - role: the job role
 - type: technical, behavioral, or mixed
-- level: Junior, Mid-level, or Senior  
+- level: Junior, Mid-level, or Senior
 - techstack: the technologies mentioned
 - amount: THE EXACT NUMBER the user said
 - userid: ${userId}
@@ -175,7 +178,7 @@ The user's name is ${userName} and their userId is ${userId}.`,
                             },
                         ],
                         temperature: 0.5,
-                        maxTokens: 1000, // ✅ increased from 250
+                        maxTokens: 1000,
                     },
                     voice: {
                         provider: "11labs",
@@ -185,10 +188,15 @@ The user's name is ${userName} and their userId is ${userId}.`,
                     serverUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/generate`,
                 });
             } else {
+                // ✅ Take interview flow — uses questions from Firebase
                 let formattedQuestions = "";
-                if (questions) {
-                    formattedQuestions = questions.map((q) => `- ${q}`).join("\n");
+                if (questions && questions.length > 0) {
+                    formattedQuestions = questions
+                        .map((q, i) => `${i + 1}. ${q}`)
+                        .join("\n");
                 }
+
+                console.log("📝 Starting interview with questions:", formattedQuestions);
 
                 await vapi.start(interviewer, {
                     variableValues: {

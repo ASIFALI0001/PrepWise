@@ -23,20 +23,26 @@ export async function createFeedback(params: CreateFeedbackParams) {
             .join("");
 
         const { object } = await generateObject({
-            model: google("gemini-2.0-flash-001"),
+            model: google("gemini-2.0-flash"),  // ✅ updated model
             schema: feedbackSchema,
             prompt: `
-You are a strict AI interviewer.
+You are a strict AI interviewer evaluating a candidate based on their interview transcript.
 
 Transcript:
 ${formattedTranscript}
 
-Score (0–100):
-- Communication Skills
-- Technical Knowledge
-- Problem-Solving
-- Cultural & Role Fit
-- Confidence & Clarity
+Please evaluate the candidate and provide scores (0-100) for each category:
+- Communication Skills: clarity, articulation, listening
+- Technical Knowledge: accuracy, depth of knowledge
+- Problem Solving: analytical thinking, approach to problems
+- Cultural Fit: values, teamwork, attitude
+- Confidence and Clarity: confidence, clear responses
+
+Also provide:
+- Overall total score (0-100)
+- Key strengths
+- Areas for improvement
+- Final assessment summary
 `,
         });
 
@@ -75,7 +81,7 @@ export async function getInterviewById(
 
         if (!interview.exists) return null;
 
-        return interview.data() as Interview;
+        return { id: interview.id, ...interview.data() } as Interview;
     } catch (error) {
         console.error("Error fetching interview:", error);
         return null;
@@ -121,7 +127,6 @@ export async function getLatestInterviews(
     if (!userId) return [];
 
     try {
-        // ✅ NO WHERE, NO INDEX REQUIRED
         const snapshot = await db
             .collection("interviews")
             .limit(limit * 3)
@@ -132,13 +137,11 @@ export async function getLatestInterviews(
                 id: doc.id,
                 ...doc.data(),
             }))
-            // ✅ apply ALL filtering in backend
             .filter(
                 (interview: any) =>
                     interview.finalized === true &&
                     interview.userId !== userId
             )
-            // ✅ manual sort
             .sort(
                 (a: any, b: any) =>
                     new Date(b.createdAt).getTime() -
