@@ -12,24 +12,26 @@ import { getCurrentUser } from "@/lib/actions/auth.action";
 import DisplayTechIcons from "@/components/DisplayTechIcons";
 
 const InterviewDetails = async ({ params }: RouteParams) => {
-    const { id } = params;
+    const { id } = await params; // ✅ await params for Next.js 15
 
     const user = await getCurrentUser();
 
-    // ✅ HARD GUARD (NO undefined user)
     if (!user || !user.id) {
         redirect("/sign-in");
     }
 
     const interview = await getInterviewById(id);
 
+    console.log("🔍 Interview fetched:", interview);
+
     if (!interview) {
+        console.error("❌ Interview not found for id:", id);
         redirect("/");
     }
 
     const feedback = await getFeedbackByInterviewId({
         interviewId: id,
-        userId: user.id, // ✅ FIXED (no !)
+        userId: user.id,
     });
 
     return (
@@ -58,7 +60,7 @@ const InterviewDetails = async ({ params }: RouteParams) => {
             </div>
 
             <Agent
-                userName={user.name} // ✅ FIXED
+                userName={user.name}
                 userId={user.id}
                 interviewId={id}
                 type="interview"
