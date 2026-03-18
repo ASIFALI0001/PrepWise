@@ -41,7 +41,7 @@ export async function POST(request: Request) {
         console.log("🔍 Extracted values:", { type, role, level, techstack, amount, userid });
 
         if (!type || !role || !level || !techstack || !amount || !userid) {
-            console.error("❌ Missing required fields");
+            console.error("❌ Missing required fields:", { type, role, level, techstack, amount, userid });
             return Response.json(
                 {
                     results: [{
@@ -53,11 +53,10 @@ export async function POST(request: Request) {
             );
         }
 
-        // ✅ Step 1 — Generate questions with Gemini
+        // ✅ Step 1 — Generate questions with Gemini 2.5 Flash
         console.log("🤖 Calling Gemini to generate questions...");
 
-        const prompt = `
-Prepare exactly ${amount} questions for a job interview.
+        const prompt = `Prepare exactly ${amount} questions for a job interview.
 Role: ${role}
 Level: ${level}
 Tech stack: ${techstack}
@@ -68,11 +67,10 @@ Rules:
 - No markdown, no code blocks, no explanation
 - Just the array like: ["Question 1", "Question 2", "Question 3"]
 - Make questions relevant to the role and tech stack
-- Questions should match the experience level
-`;
+- Questions should match the experience level`;
 
         const geminiResponse = await fetch(
-            `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
@@ -87,7 +85,7 @@ Rules:
         );
 
         const geminiData = await geminiResponse.json();
-        console.log("🤖 Gemini raw response:", JSON.stringify(geminiData, null, 2));
+        console.log("🤖 Gemini status:", geminiResponse.status);
 
         const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
         console.log("📝 Raw text from Gemini:", rawText);
@@ -95,7 +93,6 @@ Rules:
         // ✅ Step 2 — Parse questions safely
         let parsedQuestions: string[] = [];
         try {
-            // Remove markdown code blocks if present
             const cleaned = rawText
                 .replace(/```json/g, "")
                 .replace(/```/g, "")
@@ -135,14 +132,14 @@ Rules:
             type,
             level,
             techstack: techstackArray,
-            questions: parsedQuestions, // ✅ Gemini generated questions
+            questions: parsedQuestions,
             userId: userid,
             finalized: true,
             coverImage: getRandomInterviewCover(),
             createdAt: new Date().toISOString(),
         };
 
-        console.log("💾 Saving to Firebase:", JSON.stringify(interview, null, 2));
+        console.log("💾 Saving to Firebase...");
         const docRef = await db.collection("interviews").add(interview);
         console.log("✅ Saved to Firebase with ID:", docRef.id);
 
