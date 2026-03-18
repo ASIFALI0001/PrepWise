@@ -25,10 +25,8 @@ export async function createFeedback(params: CreateFeedbackParams) {
             )
             .join("");
 
-        console.log("📝 Formatted transcript:", formattedTranscript);
-
         const { object } = await generateObject({
-            model: google("models/gemini-2.5-flash"), // ✅ correct model
+            model: google("gemini-2.5-flash"), // ✅ correct model
             schema: feedbackSchema,
             prompt: `
 You are a strict AI interviewer evaluating a candidate based on their interview transcript.
@@ -36,18 +34,14 @@ You are a strict AI interviewer evaluating a candidate based on their interview 
 Transcript:
 ${formattedTranscript}
 
-Please evaluate the candidate and provide scores (0-100) for each category:
-- Communication Skills: clarity, articulation, listening
-- Technical Knowledge: accuracy, depth of knowledge
-- Problem Solving: analytical thinking, approach to problems
-- Cultural Fit: values, teamwork, attitude
-- Confidence and Clarity: confidence, clear responses
+Score (0-100) for each of these 5 categories:
+1. Communication Skills
+2. Technical Knowledge
+3. Problem Solving
+4. Cultural Fit
+5. Confidence and Clarity
 
-Also provide:
-- Overall total score (0-100)
-- Key strengths (array of strings)
-- Areas for improvement (array of strings)
-- Final assessment summary (string)
+Provide comment for each, strengths, areas for improvement, and final assessment.
 `,
         });
 
