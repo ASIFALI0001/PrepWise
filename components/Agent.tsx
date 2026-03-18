@@ -117,13 +117,14 @@ const Agent = ({
                             {
                                 role: "system",
                                 content: `You are PrepWise, a professional and friendly AI interview coach.
-Your goal is to help users prepare for job interviews by collecting their details and generating tailored interview questions.
+Your goal is to collect interview details from the user and save them.
 
 Your behavior:
 - Be encouraging, warm, and professional at all times
 - Only ask one question at a time
 - Wait for the user's response before moving to the next question
 - Keep responses short and conversational
+- Do NOT generate interview questions yourself
 
 Collect the following details in order:
 1. Ask if they are ready to start
@@ -133,23 +134,29 @@ Collect the following details in order:
 5. Ask for their tech stack or relevant skills
 6. Ask how many questions they want (between 1 and 30)
 
-Once all details are collected, call the generateInterview function with all collected values.
+Once ALL details are collected, IMMEDIATELY call the generateInterview function with all values.
+Do NOT tell the user you are generating questions.
+Do NOT wait after calling the function.
+After the function is called successfully, say EXACTLY:
+"Your interview has been created successfully! Head over to your dashboard to start practicing. Best of luck! Goodbye!"
+Then end the call.
+
 The user's name is ${userName} and their userId is ${userId}.`,
                             },
                         ],
                         functions: [
                             {
                                 name: "generateInterview",
-                                description: "Generate interview questions based on collected data",
+                                description: "Saves the interview details to the database",
                                 parameters: {
                                     type: "object",
                                     properties: {
-                                        role: { type: "string" },
-                                        type: { type: "string" },
-                                        level: { type: "string" },
-                                        techstack: { type: "string" },
-                                        amount: { type: "number" },
-                                        userid: { type: "string" },
+                                        role: { type: "string", description: "The job role" },
+                                        type: { type: "string", description: "technical, behavioral, or mixed" },
+                                        level: { type: "string", description: "Junior, Mid-level, or Senior" },
+                                        techstack: { type: "string", description: "Technologies to cover" },
+                                        amount: { type: "number", description: "Number of questions" },
+                                        userid: { type: "string", description: "The user ID" },
                                     },
                                     required: ["role", "type", "level", "techstack", "amount", "userid"],
                                 },
@@ -162,7 +169,7 @@ The user's name is ${userName} and their userId is ${userId}.`,
                         provider: "11labs",
                         voiceId: "sarah",
                     },
-                    firstMessage: `Hello ${userName}! Welcome to PrepWise. I'm here to help you ace your next interview. Are you ready to get started?`,
+                    firstMessage: `Hello ${userName}! Welcome to PrepWise. I'm here to help you set up your interview practice session. Are you ready to get started?`,
                     serverUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/generate`,
                 });
             } else {
