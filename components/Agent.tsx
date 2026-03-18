@@ -48,7 +48,7 @@ const Agent = ({
 
         const onSpeechStart = () => setIsSpeaking(true);
         const onSpeechEnd = () => setIsSpeaking(false);
-        const onError = (error: Error) => console.log("Error:", error);
+        const onError = (error: any) => console.log("❌ Vapi Error:", JSON.stringify(error, null, 2));
 
         vapi.on("call-start", onCallStart);
         vapi.on("call-end", onCallEnd);
@@ -100,42 +100,85 @@ const Agent = ({
 
     const handleCall = async () => {
         if (!userId) return;
-
         setCallStatus(CallStatus.CONNECTING);
 
         try {
             if (type === "generate") {
-                const workflowId = process.env.NEXT_PUBLIC_VAPI_WORKFLOW_ID;
-
-                if (!workflowId) {
-                    console.error("Missing VAPI WORKFLOW ID");
-                    return;
-                }
-
                 await vapi.start({
-                    workflowId,
-                    variableValues: {
-                        username: userName,
-                        userid: userId,
+                    transcriber: {
+                        provider: "deepgram",
+                        model: "nova-2",
+                        language: "en-US",
                     },
+                    model: {
+                        provider: "openai",
+                        model: "gpt-4o",
+                        messages: [
+                            {
+                                role: "system",
+                                content: `You are PrepWise, a professional and friendly AI interview coach.
+Your goal is to help users prepare for job interviews by collecting their details and generating tailored interview questions.
+
+Your behavior:
+- Be encouraging, warm, and professional at all times
+- Only ask one question at a time
+- Wait for the user's response before moving to the next question
+- Keep responses short and conversational
+
+Collect the following details in order:
+1. Ask if they are ready to start
+2. Ask for their target job role
+3. Ask for the interview type (technical, behavioral, or mixed)
+4. Ask for their experience level (Junior, Mid-level, or Senior)
+5. Ask for their tech stack or relevant skills
+6. Ask how many questions they want (between 1 and 30)
+
+Once all details are collected, call the generateInterview function with all collected values.
+The user's name is ${userName} and their userId is ${userId}.`,
+                            },
+                        ],
+                        functions: [
+                            {
+                                name: "generateInterview",
+                                description: "Generate interview questions based on collected data",
+                                parameters: {
+                                    type: "object",
+                                    properties: {
+                                        role: { type: "string" },
+                                        type: { type: "string" },
+                                        level: { type: "string" },
+                                        techstack: { type: "string" },
+                                        amount: { type: "number" },
+                                        userid: { type: "string" },
+                                    },
+                                    required: ["role", "type", "level", "techstack", "amount", "userid"],
+                                },
+                            },
+                        ],
+                        temperature: 0.5,
+                        maxTokens: 250,
+                    },
+                    voice: {
+                        provider: "11labs",
+                        voiceId: "sarah",
+                    },
+                    firstMessage: `Hello ${userName}! Welcome to PrepWise. I'm here to help you ace your next interview. Are you ready to get started?`,
+                    serverUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/vapi/generate`,
                 });
             } else {
                 let formattedQuestions = "";
                 if (questions) {
-                    formattedQuestions = questions
-                        .map((q) => `- ${q}`)
-                        .join("\n");
+                    formattedQuestions = questions.map((q) => `- ${q}`).join("\n");
                 }
 
-                await vapi.start({
-                    assistant: interviewer, // ✅ FIXED
+                await vapi.start(interviewer, {
                     variableValues: {
                         questions: formattedQuestions,
                     },
                 });
             }
-        } catch (error) {
-            console.error("Vapi start error:", error);
+        } catch (error: any) {
+            console.error("❌ Vapi start error:", error);
             setCallStatus(CallStatus.INACTIVE);
         }
     };
