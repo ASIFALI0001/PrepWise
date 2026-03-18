@@ -9,18 +9,23 @@ import {
 } from "@/lib/actions/general.action";
 import { Button } from "@/components/ui/button";
 import { getCurrentUser } from "@/lib/actions/auth.action";
+import RetakeButton from "@/components/RetakeButton";
 
 const Feedback = async ({ params }: RouteParams) => {
     const { id } = await params;
     const user = await getCurrentUser();
+
+    if (!user || !user.id) redirect("/sign-in");
 
     const interview = await getInterviewById(id);
     if (!interview) redirect("/");
 
     const feedback = await getFeedbackByInterviewId({
         interviewId: id,
-        userId: user?.id!,
+        userId: user.id,
     });
+
+    if (!feedback) redirect(`/interview/${id}`);
 
     return (
         <section className="section-feedback">
@@ -31,16 +36,16 @@ const Feedback = async ({ params }: RouteParams) => {
                 </h1>
             </div>
 
-            <div className="flex flex-row justify-center ">
+            <div className="flex flex-row justify-center">
                 <div className="flex flex-row gap-5">
-                    {/* Overall Impression */}
+                    {/* Overall Score */}
                     <div className="flex flex-row gap-2 items-center">
                         <Image src="/star.svg" width={22} height={22} alt="star" />
                         <p>
                             Overall Impression:{" "}
                             <span className="text-primary-200 font-bold">
-                {feedback?.totalScore}
-              </span>
+                                {feedback?.totalScore}
+                            </span>
                             /100
                         </p>
                     </div>
@@ -101,16 +106,12 @@ const Feedback = async ({ params }: RouteParams) => {
                     </Link>
                 </Button>
 
-                <Button className="btn-primary flex-1">
-                    <Link
-                        href={`/interview/${id}`}
-                        className="flex w-full justify-center"
-                    >
-                        <p className="text-sm font-semibold text-black text-center">
-                            Retake Interview
-                        </p>
-                    </Link>
-                </Button>
+                {/* ✅ Retake button — deletes feedback then redirects to interview */}
+                <RetakeButton
+                    interviewId={id}
+                    userId={user.id}
+                    feedbackId={feedback.id!}
+                />
             </div>
         </section>
     );

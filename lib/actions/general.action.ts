@@ -15,6 +15,9 @@ export async function createFeedback(params: CreateFeedbackParams) {
             throw new Error("Missing required fields in createFeedback");
         }
 
+        console.log("🎯 Creating feedback for interviewId:", interviewId);
+        console.log("📝 Transcript length:", transcript.length);
+
         const formattedTranscript = transcript
             .map(
                 (sentence: { role: string; content: string }) =>
@@ -22,8 +25,10 @@ export async function createFeedback(params: CreateFeedbackParams) {
             )
             .join("");
 
+        console.log("📝 Formatted transcript:", formattedTranscript);
+
         const { object } = await generateObject({
-            model: google("gemini-2.0-flash"),  // ✅ updated model
+            model: google("gemini-2.0-flash"),
             schema: feedbackSchema,
             prompt: `
 You are a strict AI interviewer evaluating a candidate based on their interview transcript.
@@ -40,32 +45,69 @@ Please evaluate the candidate and provide scores (0-100) for each category:
 
 Also provide:
 - Overall total score (0-100)
-- Key strengths
-- Areas for improvement
-- Final assessment summary
+- Key strengths (array of strings)
+- Areas for improvement (array of strings)
+- Final assessment summary (string)
 `,
         });
+
+        console.log("✅ Feedback object generated:", object);
 
         const feedback = {
             interviewId,
             userId,
             totalScore: object.totalScore ?? 0,
-            categoryScores: object.categoryScores ?? {},
+            categoryScores: object.categoryScores ?? [],
             strengths: object.strengths ?? [],
             areasForImprovement: object.areasForImprovement ?? [],
             finalAssessment: object.finalAssessment ?? "",
             createdAt: new Date().toISOString(),
         };
 
+        // ✅ If feedbackId exists, update it — otherwise create new
         const feedbackRef = feedbackId
             ? db.collection("feedback").doc(feedbackId)
             : db.collection("feedback").doc();
 
         await feedbackRef.set(feedback);
+        console.log("✅ Feedback saved with ID:", feedbackRef.id);
 
         return { success: true, feedbackId: feedbackRef.id };
     } catch (error) {
-        console.error("Error saving feedback:", error);
+        console.error("❌ Error saving feedback:", error);
+        return { success: false };
+    }
+}
+
+// ================= DELETE FEEDBACK =================
+export async function deleteFeedbackByInterviewId(params: {
+    interviewId: string;
+    userId: string;
+}) {
+    const { interviewId, userId } = params;
+
+    try {
+        const querySnapshot = await db
+            .collection("feedback")
+            .where("interviewId", "==", interviewId)
+            .where("userId", "==", userId)
+            .get();
+
+        if (querySnapshot.empty) {
+            console.log("No feedback found to delete");
+            return { success: true };
+        }
+
+        const batch = db.batch();
+        querySnapshot.docs.forEach((doc) => {
+            batch.delete(doc.ref);
+        });
+        await batch.commit();
+
+        console.log("✅ Feedback deleted for interviewId:", interviewId);
+        return { success: true };
+    } catch (error) {
+        console.error("❌ Error deleting feedback:", error);
         return { success: false };
     }
 }
