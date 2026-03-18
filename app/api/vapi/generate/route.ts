@@ -41,8 +41,7 @@ export async function POST(request: Request) {
         console.log("🔍 Extracted values:", { type, role, level, techstack, amount, userid });
 
         if (!type || !role || !level || !techstack || !amount || !userid) {
-            console.error("❌ Missing required fields:", { type, role, level, techstack, amount, userid });
-            // ✅ Still return 200 to Vapi so it doesn't say "technical issue"
+            console.error("❌ Missing required fields");
             return Response.json(
                 {
                     results: [{
@@ -54,78 +53,112 @@ export async function POST(request: Request) {
             );
         }
 
+        // ✅ Step 1 — Generate questions with Gemini
+        console.log("🤖 Calling Gemini to generate questions...");
+
         const prompt = `
-Prepare questions for a job interview.
+Prepare exactly ${amount} questions for a job interview.
 Role: ${role}
 Level: ${level}
 Tech stack: ${techstack}
 Focus: ${type}
-Number of questions: ${amount}
 
-Return ONLY a JSON array like:
-["Question 1", "Question 2"]
+Rules:
+- Return ONLY a valid JSON array of strings
+- No markdown, no code blocks, no explanation
+- Just the array like: ["Question 1", "Question 2", "Question 3"]
+- Make questions relevant to the role and tech stack
+- Questions should match the experience level
 `;
 
-        const response = await fetch(
+        const geminiResponse = await fetch(
             `https://generativelanguage.googleapis.com/v1/models/gemini-1.5-pro:generateContent?key=${process.env.GOOGLE_GENERATIVE_AI_API_KEY}`,
             {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: {
+                        temperature: 0.7,
+                        maxOutputTokens: 1024,
+                    }
                 }),
             }
         );
 
-        const data = await response.json();
-        console.log("🤖 Gemini response:", JSON.stringify(data, null, 2));
+        const geminiData = await geminiResponse.json();
+        console.log("🤖 Gemini raw response:", JSON.stringify(geminiData, null, 2));
 
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+        const rawText = geminiData?.candidates?.[0]?.content?.parts?.[0]?.text || "[]";
+        console.log("📝 Raw text from Gemini:", rawText);
 
+        // ✅ Step 2 — Parse questions safely
         let parsedQuestions: string[] = [];
         try {
-            // ✅ Strip markdown code blocks if present
-            const cleaned = text.replace(/```json|```/g, "").trim();
+            // Remove markdown code blocks if present
+            const cleaned = rawText
+                .replace(/```json/g, "")
+                .replace(/```/g, "")
+                .trim();
             parsedQuestions = JSON.parse(cleaned);
-        } catch {
-            parsedQuestions = text
+            console.log("✅ Successfully parsed questions:", parsedQuestions);
+        } catch (e) {
+            console.error("❌ JSON parse failed, trying line split:", e);
+            parsedQuestions = rawText
                 .split("\n")
-                .map((q: string) => q.trim())
-                .filter((q: string) => q.length > 0);
+                .map((q: string) => q.replace(/^[\d\-\.\*]+\s*/, "").trim())
+                .filter((q: string) => q.length > 5);
         }
 
-        console.log("✅ Parsed questions:", parsedQuestions);
+        console.log(`✅ Total questions generated: ${parsedQuestions.length}`);
+
+        if (parsedQuestions.length === 0) {
+            console.error("❌ No questions generated!");
+            return Response.json(
+                {
+                    results: [{
+                        toolCallId: body?.message?.toolCalls?.[0]?.id || "generate",
+                        result: "Failed to generate questions. Please try again."
+                    }]
+                },
+                { status: 200 }
+            );
+        }
+
+        // ✅ Step 3 — Save to Firebase with questions
+        const techstackArray = typeof techstack === "string"
+            ? techstack.split(",").map((t: string) => t.trim())
+            : techstack;
 
         const interview = {
             role,
             type,
             level,
-            techstack: techstack.split(","),
-            questions: parsedQuestions,
+            techstack: techstackArray,
+            questions: parsedQuestions, // ✅ Gemini generated questions
             userId: userid,
             finalized: true,
             coverImage: getRandomInterviewCover(),
             createdAt: new Date().toISOString(),
         };
 
-        console.log("💾 Saving to Firebase:", interview);
-        await db.collection("interviews").add(interview);
-        console.log("✅ Saved to Firebase successfully!");
+        console.log("💾 Saving to Firebase:", JSON.stringify(interview, null, 2));
+        const docRef = await db.collection("interviews").add(interview);
+        console.log("✅ Saved to Firebase with ID:", docRef.id);
 
-        // ✅ Return correct Vapi format so assistant doesn't say "technical issue"
+        // ✅ Step 4 — Return success to Vapi
         return Response.json(
             {
                 results: [{
                     toolCallId: body?.message?.toolCalls?.[0]?.id || "generate",
-                    result: "Interview successfully created!"
+                    result: `Interview created successfully with ${parsedQuestions.length} questions! The user can now start practicing.`
                 }]
             },
             { status: 200 }
         );
 
     } catch (error) {
-        console.error("❌ Error:", error);
-        // ✅ Always return 200 to Vapi even on error
+        console.error("❌ Unexpected error:", error);
         return Response.json(
             {
                 results: [{
